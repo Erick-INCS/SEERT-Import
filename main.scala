@@ -20,7 +20,8 @@ def getDF(con:Connections, table:String):org.apache.spark.sql.DataFrame = {
     spark.read.
       format("jdbc").
       option("driver", "org.firebirdsql.jdbc.FBDriver").
-      option("url", "jdbc:firebirdsql://localhost/testdb.fdb").
+      // option("url", "jdbc:firebirdsql://192.168.1.148/grsc/Clientes/ClientesGRSA/Rockwell Automation Monterrey/Base Datos 2020/Rockwell-UPD-31Dic-2020.fdb").
+      option("url", "jdbc:firebirdsql:192.168.1.148/3050:/grsc/Clientes/ClientesGRSA/Rockwell Automation Monterrey/Base Datos 2020/Rockwell-UPD-31Dic-2020.fdb").
       option("user", "sysdba").
       option("password", "masterkey").
       option("dbtable", table).
@@ -29,7 +30,7 @@ def getDF(con:Connections, table:String):org.apache.spark.sql.DataFrame = {
     spark.read.
       format("jdbc").
       option("driver", "com.microsoft.sqlserver.jdbc.SQLServerDriver").
-      option("url", "jdbc:sqlserver://localhost:1433;databaseName=test;").
+      option("url", "jdbc:sqlserver://192.168.1.151:1433;databaseName=SEERT_ROCKWELL_3_OCT26;").
       option("user", "sa").
       option("password", "mssql(!)Password").
       option("dbtable", table).
@@ -51,13 +52,50 @@ def save(name:String, content:String) = {
   pw.close()
 }
 
+def saveBatch(name:String, batchSize:Int, content:org.apache.spark.sql.Dataset[String]) = {
+  for ((b, i) <- content.collect.grouped(batchSize).toList.view.zipWithIndex) {
+    save(s"data/${i}_${name}", b.mkString)
+  }
+}
+
 registerDFList(Seq(
-  (Connections.mssql, "test"),
-  (Connections.mssql, "names"))
+  (Connections.fb, "PRODUCTOS"),
+  (Connections.mssql, "GR_PRODUCTOS_fix_NPARTE")
+  )
 )
 
-save("result.sql",
-  spark.sql("select concat(t.id, ' -> ', n.name) as STRING from test t left join names n on n.id = t.id").
+saveBatch("result.sql",
+  500,
+  spark.sql("select * from GR_PRODUCTOS_fix_NPARTE LEFT JOIN PRODUCTOS ON NPArte = PRODUCTOS.P_NPARTE WHERE P_NPARTE IS NULL").
     map(row => {
-      s"INSERT INTO STRINGS VALUES ('${row.getAs[String]("STRING")}');\n"
-    }).collect.mkString)
+      s"""INSERT INTO
+    PRODUCTOS (
+        P_NPARTE,
+        P_DESCESP,
+        P_DESCING,
+        P_TIPO,
+        P_TIPOPARTE,
+        P_UMEDIDAPARTE,
+        P_UMEDIDAFRACCION,
+        P_ARANCELMX,
+        P_ARANCELUS,
+        P_FACTCONVERSION,
+        P_NOTAS,
+        P_GENDESP,
+        P_GENMERMA
+    ) VALUES (
+      ${if (row.getAs[String]("NPArte") == null) "NULL" else s"'${row.getAs[String]("NPArte")}'"},
+      ${if (row.getAs[String]("DescEsp") == null) "NULL" else s"'${row.getAs[String]("DescEsp")}'"},
+      ${if (row.getAs[String]("DescIng") == null) "NULL" else s"'${row.getAs[String]("DescIng")}'"},
+      ${if (row.getAs[String]("Tipo") == null) "NULL" else s"'${row.getAs[String]("Tipo")}'"},
+      ${if (row.getAs[String]("TipoParte") == null) "NULL" else s"'${row.getAs[String]("TipoParte")}'"},
+      ${if (row.getAs[String]("UM") == null) "NULL" else s"'${row.getAs[String]("UM")}'"},
+      ${if (row.getAs[String]("UMedidaFraccion") == null) "NULL" else s"'${row.getAs[String]("UMedidaFraccion")}'"},
+      ${if (row.getAs[String]("FracMex") == null) "NULL" else s"'${row.getAs[String]("FracMex")}'"},
+      ${if (row.getAs[String]("ArancelUs") == null) "NULL" else s"'${row.getAs[String]("ArancelUs")}'"},
+      ${if (row.getAs[String]("FactConv") == null) "NULL" else s"'${row.getAs[String]("FactConv")}'"},
+      ${if (row.getAs[String]("Nota") == null) "NULL" else s"'${row.getAs[String]("Nota")}'"},
+      ${if (row.getAs[String]("Desp") == null) "NULL" else s"'${row.getAs[String]("Desp")}'"},
+      ${if (row.getAs[String]("Merm") == null) "NULL" else s"'${row.getAs[String]("Merm")}'"}
+    );\n"""
+    }))

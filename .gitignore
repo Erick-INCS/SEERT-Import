@@ -1,3 +1,5 @@
 metastore_db
 .metals
 .vscode
+derby.log
+data/*
