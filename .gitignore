@@ -3,3 +3,4 @@ metastore_db
 .vscode
 derby.log
 data/*
+.DS_Store
