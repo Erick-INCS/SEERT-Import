@@ -1,15 +1,15 @@
 
 registerDFList(Seq(
-  (Connections.fb, "PRODUCTOS"),
+  // (Connections.fb, "PRODUCTOS"),
   (Connections.mssql, "GR_PRODUCTOS_fix_NPARTE")
   )
 )
 
 saveBatch("productos.sql",
   500,
-  spark.sql("select * from GR_PRODUCTOS_fix_NPARTE LEFT JOIN PRODUCTOS ON NPArte = PRODUCTOS.P_NPARTE WHERE P_NPARTE IS NULL").
+  spark.sql("select * from GR_PRODUCTOS_fix_NPARTE;").
     map(row => {
-      s"""INSERT INTO
+      s"""UPDATE OR INSERT INTO
     PRODUCTOS (
         P_NPARTE,
         P_DESCESP,
@@ -25,7 +25,7 @@ saveBatch("productos.sql",
         P_GENDESP,
         P_GENMERMA
     ) VALUES (
-      ${if (row.getAs[String]("NPArte") == null) "NULL" else s"'${row.getAs[String]("NPArte").replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")}'"},
+      ${if (row.getAs[String]("NParte") == null) "NULL" else s"'${row.getAs[String]("NParte").replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")}'"},
       ${if (row.getAs[String]("DescEsp") == null) "NULL" else s"'${row.getAs[String]("DescEsp").replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")}'"},
       ${if (row.getAs[String]("DescIng") == null) "NULL" else s"'${row.getAs[String]("DescIng").replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")}'"},
       ${if (row.getAs[String]("Tipo") == null) "NULL" else s"'${row.getAs[String]("Tipo")}'"},
@@ -38,5 +38,5 @@ saveBatch("productos.sql",
       ${if (row.getAs[String]("Nota") == null) "NULL" else s"'${row.getAs[String]("Nota").replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")}'"},
       ${if (row.getAs[String]("Desp") == null) "NULL" else s"'${row.getAs[String]("Desp")}'"},
       ${if (row.getAs[String]("Merm") == null) "NULL" else s"'${row.getAs[String]("Merm")}'"}
-    );\n"""
+    ) MATCHING (P_NPARTE);\n"""
     }))

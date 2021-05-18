@@ -58,6 +58,18 @@ def saveBatch(name:String, batchSize:Int, content:org.apache.spark.sql.Dataset[S
   }
 }
 
-def clearValue(value:String) : String = {
-  value.replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")
+def getValueOf(row:org.apache.spark.sql.Row, name:String, isNumber:Boolean=false) : String = {
+  val index:Int = row.schema.fieldIndex(name)
+  if (row.isNullAt(index)) {
+    return "NULL"
+  }
+
+  row.schema(index).dataType.typeName match {
+    case "string" => {
+      s"'${row.getAs[String](name).replace("'", "''").replace("\r", "\\r").replace("\n", "\\n")}'"
+    }
+    case "integer" => {
+      s"${row.getAs[Int](name)}"
+    }
+  }
 }
