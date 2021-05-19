@@ -74,7 +74,7 @@ def saveBatch(name:String, batchSize:Int, content:org.apache.spark.sql.Dataset[S
 }
 
 
-class Column(val name:String, val numeric:Boolean=false)
+class Column(val name:String, val numeric:Boolean=false, val isKey:Boolean=false)
 class SchemaTable(val name:String, val conn:Connections=null) {
 	if (conn != null) {
 		registerDF(conn, name)

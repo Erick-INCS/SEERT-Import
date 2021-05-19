@@ -5,3 +5,4 @@ for i in $(ls *.sql); do
 done;
 zip -r data *.sql *.bat
 rm *.sql
+scp data/data.zip Erick@192.168.1.179:Documents/data
