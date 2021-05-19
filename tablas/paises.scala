@@ -8,7 +8,7 @@ saveBatch("paises.sql",
   500,
   spark.sql("select * from CaF_Pais;").
     map(row => {
-      println(row.getAs[String]("pai_consecutivo").getClass) 
+      println(row.getAs[String]("Pai_Consecutivo").getClass) 
       s"""UPDATE OR INSERT INTO
     PRODUCTOS (
         P_NPARTE,
@@ -25,10 +25,36 @@ saveBatch("paises.sql",
         P_GENDESP,
         P_GENMERMA
     ) VALUES (
-      ${row.getAs[String]("pai_consecutivo")}
+      ${func(row)}
     ) MATCHING (P_NPARTE);\n"""
     })
 )
+
+saveBatch("paises.sql",
+  500,
+  spark.sql("select * from CaF_Pais;").
+    map(row => {
+      s"""UPDATE OR INSERT INTO
+    PRODUCTOS (
+        P_NPARTE,
+        P_DESCESP,
+        P_DESCING,
+        P_TIPO,
+        P_TIPOPARTE,
+        P_UMEDIDAPARTE,
+        P_UMEDIDAFRACCION,
+        P_ARANCELMX,
+        P_ARANCELUS,
+        P_FACTCONVERSION,
+        P_NOTAS,
+        P_GENDESP,
+        P_GENMERMA
+    ) VALUES (
+      ${getValueOf(row, "Pai_Consecutivo")}
+    ) MATCHING (P_NPARTE);\n"""
+    })
+)
+
 pai_consecutivo, pai_clave, pai_nombreesp, pai_nombreing, pai_clavepedfiii, pai_iso, pai_iata, tra_clave, pai_origsistema
 saveBatch("paises.sql",
   500,
