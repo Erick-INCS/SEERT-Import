@@ -23,7 +23,7 @@ def getDF(con:Connections, table:String):org.apache.spark.sql.DataFrame = {
 				format("jdbc").
 				option("driver", "org.firebirdsql.jdbc.FBDriver").
 				// option("url", "jdbc:firebirdsql://192.168.1.148/grsc/Clientes/ClientesGRSA/Rockwell Automation Monterrey/Base Datos 2020/Rockwell-UPD-31Dic-2020.fdb").
-				option("url", "jdbc:firebirdsql:192.168.1.148/3050:/grsc/Clientes/ClientesGRSA/Rockwell Automation Monterrey/Base Datos 2020/Rockwell-UPD-31Dic-2020.fdb").
+				option("url", "jdbc:firebirdsql:192.168.1.148/3050:/grsc/Clientes/ClientesGRSA/Rockwell Automation Monterrey/Base de datos 2021/Migracion de BD/ROCKWELL_MIG.FDB").
 				option("user", "sysdba").
 				option("password", "masterkey").
 				option("dbtable", table).
