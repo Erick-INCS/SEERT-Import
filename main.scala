@@ -80,7 +80,7 @@ class SchemaTable(val name:String, val conn:Connections=null) {
 		registerDF(conn, name)
 	} 
 }
-class Table(val input:SchemaTable, val output:SchemaTable, val outRows:Seq[(Column, Column)], val select:String=null)
+class Table(val input:SchemaTable, val output:SchemaTable, val outRows:Seq[(Column, Column)], val select:String=null, val alsoUpdate:Connections=null)
 
 def replace(c:org.apache.spark.sql.Column):org.apache.spark.sql.Column = {
 	regexp_replace(
@@ -108,17 +108,36 @@ def fmtValue(c:Column):org.apache.spark.sql.Column = {
 	)
 }
 
-
 def genColumn(tb:Table): org.apache.spark.sql.Column = {
+	var alsoUpdate:Boolean = tb.alsoUpdate != null
+
+	if (tb.alsoUpdate != null && tb.outRows.filter(rw=>rw._1.isKey).length == 0) {
+		alsoUpdate = false;
+		println("AlsoUpdate Not Applyed.")
+	}
+
 	var outCol: org.apache.spark.sql.Column = concat(lit(
-		s"""INSERT INTO ${tb.output.name}(${tb.outRows.map(rw=>rw._2.name).mkString(", ")})
+
+		s"""${if (!alsoUpdate) "INSERT" else {
+			tb.alsoUpdate match {
+				case Connections.fb => {
+					"UPDATE OR INSERT"
+				}
+			}
+		}} INTO ${tb.output.name}(${tb.outRows.map(rw=>rw._2.name).mkString(", ")})
 		VALUES("""),
 		fmtValue(tb.outRows.head._1)
 	)
 	for (c <- tb.outRows.tail.map(rw=>rw._1)) {
 		outCol = concat(outCol, lit(","), fmtValue(c))
 	}
-	concat(outCol, lit(");\n"))
+	concat(outCol, lit(s") ${if (!alsoUpdate) "" else {
+		tb.alsoUpdate match {
+			case Connections.fb => {
+				s"MATCHING (${tb.outRows.filter(rw=>rw._1.isKey).map(rw=>rw._2.name).mkString(", ")})"
+			}
+		}
+	}};\n"))
 }
 
 def getSQL(tb:Table):String = {
@@ -136,4 +155,10 @@ def saveBatchTable(name:String, batchSize:Int, content:Table) = {
     save(s"data/${i}_${name}", b.mkString)
   }
   println(s"\ndata/{n}_${name} SAVED.\n")
+}
+
+def saveBatchTables(names:Seq[String], tables:Seq[Table], batchSize:Int=600) = {
+	for ((tb, i) <- tables.view.zipWithIndex) {
+		saveBatchTable(names(i), batchSize, tb)
+	}
 }
