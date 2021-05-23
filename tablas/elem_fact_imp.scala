@@ -7,9 +7,9 @@ val t = new Table(
 		(new Column("Pai_Clave", false, true), new Column("EI_PAISORIGEN")),
 		(new Column("Tipo"), new Column("EI_NPTIPO")),
 		(new Column("TipoParte"), new Column("EI_TIPOPARTE")),
-		(new Column("FId_CostoUnit"), new Column("EI_VALORUNIT")),
-		(new Column("FId_DescripcionEsp"), new Column("EI_DESCESP")),
-		(new Column("FId_DescripcionIng"), new Column("EI_DESCING")),
+		(new Column("FId_CostoUnit", true), new Column("EI_VALORUNIT")),
+		(new Column("FId_DescripcionEsp", false, false, 150), new Column("EI_DESCESP")),
+		(new Column("FId_DescripcionIng", false, false, 150), new Column("EI_DESCING")),
 		(new Column("Med_Clave"), new Column("EI_UMPARTE")),
 		(new Column("Med_Fraccion"), new Column("EI_UMFRACCION")),
 		(new Column("Pid_FactConvMx", true), new Column("EI_FCONVERSION")),
@@ -30,6 +30,6 @@ val t = new Table(
 )
 
 saveBatchTables(
-	Seq("pedimentos_imp.sql"),
+	Seq("elem_fact_imp.sql"),
 	Seq(t)
 )

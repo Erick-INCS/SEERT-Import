@@ -3,10 +3,25 @@ import org.apache.spark.sql.SparkSession
 import java.io.{PrintWriter, File}
 import org.apache.spark.sql.Row
 
+
+// val conf=SparkConf()
+// conf.set("spark.executor.memory", "4g")
+// conf.set("spark.cores.max", "2")
+// conf.set("spark.driver.extraClassPath",
+//     driver_home+'/jdbc/postgresql-9.4-1201-jdbc41.jar:'\
+//     +driver_home+'/jdbc/clickhouse-jdbc-0.1.52.jar:'\
+//     +driver_home+'/mongo/mongo-spark-connector_2.11-2.2.3.jar:'\
+//     +driver_home+'/mongo/mongo-java-driver-3.8.0.jar') 
+
+// sc = SparkContext.getOrCreate(conf)
+
+// spark = SQLContext(sc)
+
 val spark = SparkSession.
 	builder().
 	appName("Spark Multi DB DataPump Test").
-	//config("spark.some.config.option", "some-value").
+	config("spark.driver.memory", "7g").
+	config("spark.driver.extraClassPath", "drivers/mssql-jdbc-9.2.1.jre11.jar:drivers/jaybird-full-3.0.9.jar").
 	getOrCreate()
 
 object Connections extends Enumeration {
@@ -74,7 +89,7 @@ def saveBatch(name:String, batchSize:Int, content:org.apache.spark.sql.Dataset[S
 }
 
 
-class Column(val name:String, val numeric:Boolean=false, val isKey:Boolean=false)
+class Column(val name:String, val numeric:Boolean=false, val isKey:Boolean=false, val colLength:Integer=null)
 class SchemaTable(val name:String, val conn:Connections=null) {
 	if (conn != null) {
 		registerDF(conn, name)
@@ -96,9 +111,13 @@ def replace(c:org.apache.spark.sql.Column):org.apache.spark.sql.Column = {
 
 def encapsulate(c:Column):org.apache.spark.sql.Column = {
 	if (c.numeric) {
-		replace(col(c.name))
+		return replace(col(c.name))
 	} else {
-		concat(lit("'"), replace(col(c.name)), lit("'"))
+		var a = col(c.name)
+		if(c.colLength != null) {
+			a = substring(a, 0, c.colLength)
+		}
+		return concat(lit("'"), replace( a ), lit("'"))
 	}
 }
 
