@@ -29,7 +29,13 @@ object Connections extends Enumeration {
 	val fb, mssql, test = Value
 }
 
+object Formats extends Enumeration {
+	type Formats = Value
+	val sql, csv, txt = Value
+}
+
 import Connections._
+import Formats._
 
 def getDF(con:Connections, table:String):org.apache.spark.sql.DataFrame = {
 	con match {
@@ -95,36 +101,76 @@ class SchemaTable(val name:String, val conn:Connections=null) {
 		registerDF(conn, name)
 	} 
 }
-class Table(val input:SchemaTable, val output:SchemaTable, val outRows:Seq[(Column, Column)], val select:String=null, val alsoUpdate:Connections=null)
+class Table(val input:SchemaTable, val output:SchemaTable, val outRows:Seq[(Column, Column)], val select:String=null, val alsoUpdate:Connections=null, val format:Formats=Formats.sql)
 
-def replace(c:org.apache.spark.sql.Column):org.apache.spark.sql.Column = {
-	regexp_replace(
+def replace(c:org.apache.spark.sql.Column, fmt:Formats, ln:Int=1):org.apache.spark.sql.Column = {
+	// regexp_replace(
+		var strDelimiter:String = "'"
+		var strScape:String = "''"
+
+		fmt match {
+			case Formats.csv => {
+				strDelimiter = "\""
+				strScape = "'"
+			}
+			case Formats.txt => {
+				return regexp_replace(
+					regexp_replace(rpad(c, ln, " "), lit("\r"), lit("\\r")),
+					lit("\n"),
+					lit("\\n")
+				)
+			}
+		}
+
 		regexp_replace(
-			regexp_replace(c, lit("\r"), lit("\\r")),
-				lit("\n"),
-				lit("\\n")
-			),
-		lit("'"),
-		lit("''")
-	)
+			regexp_replace(
+				regexp_replace(c, lit("\r"), lit("\\r")),
+					lit("\n"),
+					lit("\\n")
+				),
+			lit(strDelimiter),
+			lit(strScape)
+		)
+		// ,
+	// 	lit("\""),
+	// 	lit("''")
+	// )
 }
 
-def encapsulate(c:Column):org.apache.spark.sql.Column = {
+def encapsulate(c:Column, fmt:Formats):org.apache.spark.sql.Column = {
 	if (c.numeric) {
-		return replace(col(c.name))
+		return replace(col(c.name), fmt)
 	} else {
 		var a = col(c.name)
 		if(c.colLength != null) {
 			a = substring(a, 0, c.colLength)
 		}
-		return concat(lit("'"), replace( a ), lit("'"))
+		var outer:String = "";
+		fmt match {
+			case Formats.sql => {
+				outer = "'"
+			}
+			case Formats.csv => {
+				outer = "\""
+			}
+			case Formats.txt => {
+				outer = ""
+			}
+		}
+		return concat(lit(outer), replace( a, fmt, c.colLength), lit(outer))
 	}
 }
 
-def fmtValue(c:Column):org.apache.spark.sql.Column = {
-	when(col(c.name).isNull, "NULL").otherwise(
-		encapsulate(c)
-	)
+def fmtValue(c:Column, fmt:Formats=Formats.sql):org.apache.spark.sql.Column = {
+	if (fmt == Formats.sql) {
+		when(col(c.name).isNull, "NULL").otherwise(
+			encapsulate(c, fmt)
+		)
+	} else {
+		when(col(c.name).isNull, "").otherwise(
+			encapsulate(c, fmt)
+		)
+	}
 }
 
 def genColumn(tb:Table): org.apache.spark.sql.Column = {
@@ -135,28 +181,49 @@ def genColumn(tb:Table): org.apache.spark.sql.Column = {
 		println("AlsoUpdate Not Applyed.")
 	}
 
-	var outCol: org.apache.spark.sql.Column = concat(lit(
+	tb.format match {
+		case Formats.sql => {
 
-		s"""${if (!alsoUpdate) "INSERT" else {
-			tb.alsoUpdate match {
-				case Connections.fb => {
-					"UPDATE OR INSERT"
+			var outCol: org.apache.spark.sql.Column = concat(lit(
+		
+				s"""${if (!alsoUpdate) "INSERT" else {
+					tb.alsoUpdate match {
+						case Connections.fb => {
+							"UPDATE OR INSERT"
+						}
+					}
+				}} INTO ${tb.output.name}(${tb.outRows.map(rw=>rw._2.name).mkString(", ")})
+				VALUES("""),
+				fmtValue(tb.outRows.head._1, tb.format)
+			)
+			for (c <- tb.outRows.tail.map(rw=>rw._1)) {
+				outCol = concat(outCol, lit(","), fmtValue(c, tb.format))
+			}
+			return concat(outCol, lit(s") ${if (!alsoUpdate) "" else {
+				tb.alsoUpdate match {
+					case Connections.fb => {
+						s"MATCHING (${tb.outRows.filter(rw=>rw._1.isKey).map(rw=>rw._2.name).mkString(", ")})"
+					}
 				}
+			}};\n"))
+		} 
+		case Formats.csv => {
+			var outCol: org.apache.spark.sql.Column = fmtValue(tb.outRows.head._1, tb.format)
+			for (c <- tb.outRows.tail.map(rw=>rw._1)) {
+				outCol = concat(outCol, lit(","), fmtValue(c, tb.format))
 			}
-		}} INTO ${tb.output.name}(${tb.outRows.map(rw=>rw._2.name).mkString(", ")})
-		VALUES("""),
-		fmtValue(tb.outRows.head._1)
-	)
-	for (c <- tb.outRows.tail.map(rw=>rw._1)) {
-		outCol = concat(outCol, lit(","), fmtValue(c))
-	}
-	concat(outCol, lit(s") ${if (!alsoUpdate) "" else {
-		tb.alsoUpdate match {
-			case Connections.fb => {
-				s"MATCHING (${tb.outRows.filter(rw=>rw._1.isKey).map(rw=>rw._2.name).mkString(", ")})"
-			}
+			return outCol
 		}
-	}};\n"))
+
+		case Formats.txt => {
+			var outCol: org.apache.spark.sql.Column = fmtValue(tb.outRows.head._1, tb.format)
+			for (c <- tb.outRows.tail.map(rw=>rw._1)) {
+				outCol = concat(outCol, fmtValue(c, tb.format))
+			}
+			return outCol
+		}
+	}
+
 }
 
 def getSQL(tb:Table):String = {
@@ -180,4 +247,14 @@ def saveBatchTables(names:Seq[String], tables:Seq[Table], batchSize:Int=600) = {
 	for ((tb, i) <- tables.view.zipWithIndex) {
 		saveBatchTable(names(i), batchSize, tb)
 	}
+}
+
+def saveAsCSV(name:String, table:Table) = {
+	save(s"data/${name}", table.outRows.map(rw=>rw._1.name).mkString(",") + "\r\n" + generate(table).collect.mkString("\n"))
+	println(s"\ndata/{n}_${name} SAVED.\n")
+}
+
+def saveAsTXT(name:String, table:Table) = {
+	save(s"data/${name}", generate(table).collect.mkString("\n"))
+	println(s"\ndata/{n}_${name} SAVED.\n")
 }

@@ -1,1 +1,2 @@
-rm -rf data/*
+rm -rf data
+mkdir data
