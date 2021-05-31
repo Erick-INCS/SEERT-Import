@@ -31,7 +31,7 @@ object Connections extends Enumeration {
 
 object Formats extends Enumeration {
 	type Formats = Value
-	val sql, csv, txt = Value
+	val sql, csv, txt, list, slList = Value
 }
 
 import Connections._
@@ -120,6 +120,15 @@ def replace(c:org.apache.spark.sql.Column, fmt:Formats, ln:Int=1):org.apache.spa
 					lit("\\n")
 				)
 			}
+			case Formats.list => {
+				return c
+			}
+			case Formats.slList => {
+				return c
+			}
+			case _ => {
+
+			}
 		}
 
 		regexp_replace(
@@ -156,6 +165,12 @@ def encapsulate(c:Column, fmt:Formats):org.apache.spark.sql.Column = {
 			case Formats.txt => {
 				outer = ""
 			}
+			case Formats.list => {
+				outer = ""
+			}
+			case Formats.slList => {
+				outer = ""
+			}
 		}
 		return concat(lit(outer), replace( a, fmt, c.colLength), lit(outer))
 	}
@@ -167,7 +182,7 @@ def fmtValue(c:Column, fmt:Formats=Formats.sql):org.apache.spark.sql.Column = {
 			encapsulate(c, fmt)
 		)
 	} else {
-		when(col(c.name).isNull, "").otherwise(
+		when(col(c.name).isNull, lit("")).otherwise(
 			encapsulate(c, fmt)
 		)
 	}
@@ -222,6 +237,20 @@ def genColumn(tb:Table): org.apache.spark.sql.Column = {
 			}
 			return outCol
 		}
+		case Formats.list => {
+			var outCol: org.apache.spark.sql.Column = fmtValue(tb.outRows.head._1, tb.format)
+			for (c <- tb.outRows.tail.map(rw=>rw._1)) {
+				outCol = concat(outCol, lit("|"),fmtValue(c, tb.format))
+			}
+			return outCol
+		}
+		case Formats.slList => {
+			var outCol: org.apache.spark.sql.Column = fmtValue(tb.outRows.head._1, tb.format)
+			for (c <- tb.outRows.tail.map(rw=>rw._1)) {
+				outCol = concat(outCol, lit("||"), fmtValue(c, tb.format))
+			}
+			return outCol
+		}
 	}
 
 }
@@ -251,10 +280,10 @@ def saveBatchTables(names:Seq[String], tables:Seq[Table], batchSize:Int=600) = {
 
 def saveAsCSV(name:String, table:Table) = {
 	save(s"data/${name}", table.outRows.map(rw=>rw._1.name).mkString(",") + "\r\n" + generate(table).collect.mkString("\n"))
-	println(s"\ndata/{n}_${name} SAVED.\n")
+	println(s"\ndata/${name} SAVED.\n")
 }
 
-def saveAsTXT(name:String, table:Table) = {
-	save(s"data/${name}", generate(table).collect.mkString("\n"))
-	println(s"\ndata/{n}_${name} SAVED.\n")
+def saveAsTXT(name:String, table:Table, separator:String="\r\n") = {
+	save(s"data/${name}", generate(table).collect.mkString(separator))
+	println(s"\ndata/${name} SAVED.\n")
 }
